@@ -18,8 +18,8 @@ export default function CompanyAvatar({
   const getLogoPath = (companyName: string): string => {
     const normalizedName = companyName
       .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-')
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/-+/g, '_')
       .replace(/^-|-$/g, '')
 
     return `/src/assets/company_logos/${normalizedName}.jpeg`
