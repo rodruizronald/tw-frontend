@@ -111,6 +111,10 @@ export default function JobDetails({
           </Box>
           <Button
             variant='contained'
+            onClick={() =>
+              job.applicationUrl && window.open(job.applicationUrl, '_blank')
+            }
+            disabled={!job.applicationUrl}
             sx={{
               bgcolor: '#0a66c2',
               borderRadius: '20px',
@@ -232,7 +236,12 @@ export default function JobDetails({
               {/* Apply Button */}
               <Button
                 variant='contained'
+                onClick={() =>
+                  job.applicationUrl &&
+                  window.open(job.applicationUrl, '_blank')
+                }
                 size='large'
+                disabled={!job.applicationUrl}
                 sx={{
                   bgcolor: '#0a66c2',
                   borderRadius: '25px',
