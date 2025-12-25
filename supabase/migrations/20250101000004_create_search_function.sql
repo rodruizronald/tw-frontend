@@ -42,6 +42,7 @@ RETURNS TABLE (
   total_count BIGINT
 )
 LANGUAGE plpgsql
+SET search_path = public
 AS $$
 BEGIN
   RETURN QUERY

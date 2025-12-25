@@ -34,7 +34,10 @@ COMMENT ON TABLE jobs IS 'Stores job postings with full-text search capabilities
 -- Function to update search_vector
 -- This function is called by a trigger to maintain the search vector
 CREATE OR REPLACE FUNCTION update_jobs_search_vector()
-RETURNS trigger AS $$
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
 DECLARE
     lang regconfig;
 BEGIN
@@ -46,7 +49,7 @@ BEGIN
         setweight(to_tsvector(lang, coalesce(array_to_string(NEW.skill_nice_have, ' '), '')), 'C');
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Trigger to maintain search_vector on INSERT and UPDATE
 CREATE TRIGGER update_jobs_search_vector_trigger

@@ -4,7 +4,8 @@
 -- ============================================
 -- Companies Indexes
 -- ============================================
-CREATE UNIQUE INDEX idx_companies_name ON companies(name);
+-- Note: No index needed on companies(name) because the UNIQUE constraint
+-- in the table definition already creates an implicit index (companies_name_key)
 CREATE INDEX idx_companies_active ON companies(id) WHERE is_active = TRUE;
 
 -- ============================================
