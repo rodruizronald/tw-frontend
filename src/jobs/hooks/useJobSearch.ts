@@ -1,194 +1,291 @@
+/**
+ * useJobSearch Hook
+ *
+ * React Query-based hook for managing job search operations.
+ * Provides search functionality with caching, loading states, and error handling.
+ */
+
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 
 import { useLogger } from '@/services/logging'
+import type { SupabaseAppError } from '@/services/supabase/errors'
 
-import { jobService } from '../api/jobService'
-import type { FilterState } from '../constants/defaultFilters'
+import { searchJobs as searchJobsApi } from '../api/jobService'
+import type {
+  FilterState,
+  JobSearchFilters,
+  JobSearchPagination,
+} from '../types/filters'
 import type { Job } from '../types/models'
-import type { PaginationParams } from '../types/pagination'
+
+// =============================================================================
+// Types
+// =============================================================================
 
 /**
- * Search state interface
+ * Pagination state returned by the hook
  */
-interface SearchState {
-  jobs: Job[]
-  pagination: {
-    total: number
-    limit: number
-    offset: number
-    hasMore: boolean
-  } | null
+export interface PaginationState {
+  total: number
+  limit: number
+  offset: number
+  hasMore: boolean
 }
 
 /**
- * Search parameters for query key
+ * Search state containing jobs and pagination
+ */
+export interface SearchState {
+  jobs: Job[]
+  pagination: PaginationState | null
+}
+
+/**
+ * Internal search parameters for query key generation
  */
 interface SearchParameters {
-  searchQuery: string
-  filters: Partial<FilterState>
-  pagination: PaginationParams
+  filters: JobSearchFilters
+  pagination: JobSearchPagination
 }
 
 /**
  * Return type for the useJobSearch hook
  */
-interface UseJobSearchReturn {
+export interface UseJobSearchReturn {
+  /** List of jobs from the search results */
   jobs: Job[]
-  pagination: SearchState['pagination']
+  /** Pagination information */
+  pagination: PaginationState | null
+  /** True during initial load (no data yet) */
   isLoading: boolean
+  /** True when fetching (including background refetch) */
   isFetching: boolean
+  /** True if the last request failed */
   isError: boolean
-  error: Error | null
-  searchJobs: (
-    searchQuery: string,
-    filters: Partial<FilterState>,
-    pagination: PaginationParams
+  /** Error details if isError is true */
+  error: SupabaseAppError | null
+  /** Execute a job search */
+  search: (
+    filters: JobSearchFilters,
+    pagination?: JobSearchPagination
   ) => Promise<SearchState>
+  /** Clear all search results and reset state */
   clearSearch: () => void
+  /** Retry the last failed search */
   retrySearch: () => void
 }
 
+// =============================================================================
+// Query Key Factory
+// =============================================================================
+
 /**
- * Custom hook for managing job search API calls using React Query
+ * Create a stable query key from search parameters
+ */
+function createQueryKey(
+  params: SearchParameters | null
+): readonly ['jobs', 'search', ...unknown[]] {
+  if (!params) {
+    return ['jobs', 'search', 'empty'] as const
+  }
+
+  return [
+    'jobs',
+    'search',
+    params.filters.query,
+    params.filters.experienceLevel,
+    params.filters.employmentType,
+    params.filters.location,
+    params.filters.workMode,
+    params.filters.province,
+    params.filters.jobFunction,
+    params.filters.language,
+    params.filters.company,
+    params.filters.dateFrom,
+    params.filters.dateTo,
+    params.pagination.page,
+    params.pagination.pageSize,
+  ] as const
+}
+
+// =============================================================================
+// Hook Implementation
+// =============================================================================
+
+/**
+ * Custom hook for managing job search with React Query
+ *
+ * @example
+ * ```typescript
+ * const { jobs, pagination, isLoading, search } = useJobSearch()
+ *
+ * // Execute search
+ * await search(
+ *   { query: 'react developer', experienceLevel: 'senior' },
+ *   { page: 1, pageSize: 20 }
+ * )
+ *
+ * // Access results
+ * console.log(`Found ${pagination?.total} jobs`)
+ * jobs.forEach(job => console.log(job.title))
+ * ```
  */
 export function useJobSearch(): UseJobSearchReturn {
   const logger = useLogger('useJobSearch')
   const queryClient = useQueryClient()
 
-  // Track current search parameters for query key
+  // Track current search parameters
   const [searchParams, setSearchParams] = useState<SearchParameters | null>(
     null
   )
 
-  // Create query key from search parameters
-  const queryKey = searchParams
-    ? ([
-        'jobs',
-        'search',
-        searchParams.searchQuery,
-        searchParams.filters,
-        searchParams.pagination,
-      ] as const)
-    : (['jobs', 'search', 'empty'] as const)
+  // Track the last error from the API
+  const [apiError, setApiError] = useState<SupabaseAppError | null>(null)
 
-  // Use React Query for the actual API call
-  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
+  // Create query key from search parameters
+  const queryKey = createQueryKey(searchParams)
+
+  // React Query for API calls
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey,
     queryFn: async (): Promise<SearchState> => {
       if (!searchParams) {
-        // Return empty state for the 'empty' query key
-        return {
-          jobs: [],
-          pagination: null,
-        }
+        return { jobs: [], pagination: null }
       }
 
-      const { searchQuery, filters, pagination } = searchParams
+      const { filters, pagination } = searchParams
 
-      logger.info('Starting job search API call', {
-        searchQuery,
-        filters,
+      logger.info('Executing job search', {
+        query: filters.query,
+        filters: {
+          experienceLevel: filters.experienceLevel,
+          employmentType: filters.employmentType,
+          workMode: filters.workMode,
+          province: filters.province,
+          jobFunction: filters.jobFunction,
+        },
         pagination,
       })
 
-      const result = await jobService.searchJobs(
-        searchQuery,
-        filters,
-        pagination
-      )
+      const result = await searchJobsApi(filters, pagination)
 
-      logger.info('Job search API successful', {
-        jobCount: result.jobs?.length || 0,
-        pagination: result.pagination,
+      // Handle API-level errors
+      if (result.error) {
+        logger.error('Job search failed', {
+          error: result.error.message,
+          type: result.error.type,
+        })
+        setApiError(result.error)
+        // Still return the empty result structure
+        return {
+          jobs: result.jobs,
+          pagination: result.pagination,
+        }
+      }
+
+      // Clear any previous error on success
+      setApiError(null)
+
+      logger.info('Job search completed', {
+        jobCount: result.jobs.length,
+        total: result.pagination?.total ?? 0,
+        hasMore: result.pagination?.hasMore ?? false,
       })
 
       return {
-        jobs: result.jobs || [],
-        pagination: result.pagination ?? null,
+        jobs: result.jobs,
+        pagination: result.pagination,
       }
     },
-    enabled: !!searchParams && !!searchParams.searchQuery?.trim(), // Only run if we have valid search params
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    // Only run if we have a valid search query
+    enabled: !!searchParams?.filters.query?.trim(),
+    // Cache configuration
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    // Keep previous data while fetching new data
     placeholderData: previousData => previousData,
   })
 
   /**
-   * Perform job search by updating search parameters (triggers React Query)
+   * Execute a job search
    */
-  const searchJobs = useCallback(
+  const search = useCallback(
     async (
-      searchQuery: string,
-      filters: Partial<FilterState>,
-      pagination: PaginationParams
+      filters: JobSearchFilters,
+      pagination: JobSearchPagination = {}
     ): Promise<SearchState> => {
-      // Don't search if query is empty or just whitespace
-      if (!searchQuery || searchQuery.trim() === '') {
+      const emptyState: SearchState = { jobs: [], pagination: null }
+
+      // Validate query
+      if (!filters.query?.trim()) {
         logger.debug('Skipping search - empty query')
         setSearchParams(null)
-        const emptyState: SearchState = {
-          jobs: [],
-          pagination: null,
-        }
+        setApiError(null)
         return emptyState
       }
 
+      const normalizedFilters: JobSearchFilters = {
+        ...filters,
+        query: filters.query.trim(),
+      }
+
+      const normalizedPagination: JobSearchPagination = {
+        page: pagination.page ?? 1,
+        pageSize: pagination.pageSize ?? 20,
+      }
+
       const newParams: SearchParameters = {
-        searchQuery: searchQuery.trim(),
-        filters,
-        pagination,
+        filters: normalizedFilters,
+        pagination: normalizedPagination,
       }
 
-      // Check if parameters are the same to prevent unnecessary requests
-      const currentParamsString = JSON.stringify(searchParams)
-      const newParamsString = JSON.stringify(newParams)
+      // Check for duplicate requests
+      const newQueryKey = createQueryKey(newParams)
+      const currentQueryKey = createQueryKey(searchParams)
 
-      if (currentParamsString === newParamsString) {
+      if (JSON.stringify(newQueryKey) === JSON.stringify(currentQueryKey)) {
         logger.debug('Skipping duplicate search request')
-        return data ?? { jobs: [], pagination: null }
+        return data ?? emptyState
       }
 
-      logger.debug('Updating search parameters', {
-        searchQuery: newParams.searchQuery,
-        filters: newParams.filters,
-        pagination: newParams.pagination,
+      logger.debug('Initiating new search', {
+        query: normalizedFilters.query,
+        page: normalizedPagination.page,
       })
+
+      // Update state to trigger query
       setSearchParams(newParams)
 
-      // Wait for the query to complete and return the result
-      const result = await queryClient.fetchQuery({
-        queryKey: [
-          'jobs',
-          'search',
-          newParams.searchQuery,
-          newParams.filters,
-          newParams.pagination,
-        ],
-        queryFn: async (): Promise<SearchState> => {
-          logger.info('Starting job search API call', {
-            searchQuery: newParams.searchQuery,
-            filters: newParams.filters,
-            pagination: newParams.pagination,
-          })
-          const apiResult = await jobService.searchJobs(
-            newParams.searchQuery,
-            newParams.filters,
-            newParams.pagination
-          )
-          logger.info('Job search API successful', {
-            jobCount: apiResult.jobs?.length || 0,
-            pagination: apiResult.pagination,
-          })
-          return {
-            jobs: apiResult.jobs || [],
-            pagination: apiResult.pagination ?? null,
-          }
-        },
-        staleTime: 5 * 60 * 1000,
-      })
+      // Fetch and return results
+      try {
+        const result = await queryClient.fetchQuery({
+          queryKey: createQueryKey(newParams),
+          queryFn: async (): Promise<SearchState> => {
+            const apiResult = await searchJobsApi(
+              normalizedFilters,
+              normalizedPagination
+            )
 
-      return result
+            if (apiResult.error) {
+              setApiError(apiResult.error)
+            } else {
+              setApiError(null)
+            }
+
+            return {
+              jobs: apiResult.jobs,
+              pagination: apiResult.pagination,
+            }
+          },
+          staleTime: 5 * 60 * 1000,
+        })
+
+        return result
+      } catch (error) {
+        logger.error('Search query failed', { error })
+        return emptyState
+      }
     },
     [searchParams, data, queryClient, logger]
   )
@@ -199,7 +296,7 @@ export function useJobSearch(): UseJobSearchReturn {
   const clearSearch = useCallback((): void => {
     logger.debug('Clearing search results')
     setSearchParams(null)
-    // Optionally clear related queries from cache
+    setApiError(null)
     queryClient.removeQueries({ queryKey: ['jobs', 'search'] })
   }, [queryClient, logger])
 
@@ -209,6 +306,7 @@ export function useJobSearch(): UseJobSearchReturn {
   const retrySearch = useCallback((): void => {
     if (searchParams) {
       logger.info('Retrying last search')
+      setApiError(null)
       refetch()
     } else {
       logger.warn('No previous search to retry')
@@ -216,17 +314,65 @@ export function useJobSearch(): UseJobSearchReturn {
   }, [searchParams, refetch, logger])
 
   return {
-    // State from React Query
+    // Data
     jobs: data?.jobs ?? [],
     pagination: data?.pagination ?? null,
+
+    // Loading states
     isLoading,
     isFetching,
-    isError,
-    error: error as Error | null,
+
+    // Error state
+    isError: isError || apiError !== null,
+    error: apiError,
 
     // Actions
-    searchJobs,
+    search,
     clearSearch,
     retrySearch,
   }
+}
+
+// =============================================================================
+// Utility: Convert Legacy FilterState to JobSearchFilters
+// =============================================================================
+
+/**
+ * Convert legacy FilterState to the new JobSearchFilters format
+ *
+ * This utility helps migrate from the old filter format to the new one.
+ * Use this when integrating with components that still use the old format.
+ *
+ * @param query - The search query string
+ * @param legacyFilters - Filters in the old FilterState format
+ * @returns Filters in the new JobSearchFilters format
+ */
+export function convertLegacyFilters(
+  query: string,
+  legacyFilters: Partial<FilterState>
+): JobSearchFilters {
+  // Build the filters object, only including defined values
+  const filters: JobSearchFilters = { query }
+
+  if (legacyFilters.experienceLevel !== undefined)
+    filters.experienceLevel = legacyFilters.experienceLevel
+  if (legacyFilters.employmentType !== undefined)
+    filters.employmentType = legacyFilters.employmentType
+  if (legacyFilters.location !== undefined)
+    filters.location = legacyFilters.location
+  if (legacyFilters.workMode !== undefined)
+    filters.workMode = legacyFilters.workMode
+  if (legacyFilters.province !== undefined)
+    filters.province = legacyFilters.province
+  if (legacyFilters.jobFunction !== undefined)
+    filters.jobFunction = legacyFilters.jobFunction
+  if (legacyFilters.language !== undefined)
+    filters.language = legacyFilters.language
+  if (legacyFilters.company !== undefined)
+    filters.company = legacyFilters.company
+  if (legacyFilters.dateFrom !== undefined)
+    filters.dateFrom = legacyFilters.dateFrom
+  if (legacyFilters.dateTo !== undefined) filters.dateTo = legacyFilters.dateTo
+
+  return filters
 }
