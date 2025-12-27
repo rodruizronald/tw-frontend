@@ -1,85 +1,165 @@
-import { LogContext, logger } from '@/services/logging'
-
-import { ApiJob, ApiRequirements, ApiSearchResponse } from '../types/api'
-import { Job, SearchResponse } from '../types/models'
-
 /**
- * Transform API job response to frontend format
- * Converts snake_case API fields to camelCase frontend fields
+ * Job Transformers
+ *
+ * Transforms Supabase database types to frontend model types.
+ * Handles the conversion from snake_case database fields to
+ * camelCase frontend fields.
  */
 
-/**
- * Transform a single job from API format to frontend format
- * @param apiJob - Job object from API response
- * @returns Transformed job object for frontend use
- */
-export const transformJob = (apiJob: ApiJob | null | undefined): Job | null => {
-  if (!apiJob) return null
+import { logger } from '@/services/logging'
 
+import type { Job, SearchResponse } from '../types/models'
+import type { JobSearchResult } from './jobRepository'
+
+// =============================================================================
+// Single Job Transformation
+// =============================================================================
+
+/**
+ * Transform a database job row to frontend Job format
+ *
+ * @param dbJob - Job row from the search_jobs RPC function
+ * @returns Transformed Job object for frontend use
+ */
+export function transformJob(dbJob: JobSearchResult): Job {
   return {
     // Basic job information
-    id: apiJob.job_id,
-    title: apiJob.title,
-    company: apiJob.company_name,
-    companyId: apiJob.company_id,
-    companyLogoUrl: apiJob.company_logo_url, // This is already optional in ApiJob
+    id: dbJob.id.toString(),
+    title: dbJob.title,
+    company: dbJob.company_name,
+    companyId: dbJob.company_id.toString(),
+    companyLogoUrl: undefined, // Not available in current schema
 
     // Job details
-    description: apiJob.description,
-    responsibilities: apiJob.responsibilities ?? [],
-    benefits: apiJob.benefits ?? [],
-    applicationUrl: apiJob.application_url,
+    description: dbJob.description,
+    responsibilities: dbJob.responsibilities ?? [],
+    benefits: dbJob.benefits ?? [],
+    applicationUrl: dbJob.application_url,
 
     // Job classification
-    experience: apiJob.experience_level,
-    jobType: apiJob.employment_type,
-    location: apiJob.location,
-    workMode: apiJob.work_mode,
+    experience: dbJob.experience_level,
+    jobType: dbJob.employment_type,
+    location: dbJob.location,
+    workMode: dbJob.work_mode,
 
-    // Requirements (transform nested object)
-    requirements: transformRequirements(apiJob.requirements),
+    // Requirements
+    requirements: {
+      mustHave: dbJob.skill_must_have ?? [],
+      niceToHave: dbJob.skill_nice_have ?? [],
+    },
 
-    // Technologies (transform array of objects to array of strings)
-    technologies: apiJob.main_technologies ?? [],
+    // Technologies
+    technologies: dbJob.main_technologies ?? [],
 
     // Date information
-    postedDate: transformPostedDate(apiJob.posted_at),
+    postedDate: formatRelativeDate(dbJob.created_at),
   }
 }
 
+// =============================================================================
+// Batch Transformation
+// =============================================================================
+
 /**
- * Transform requirements object from API format
- * @param apiRequirements - Requirements from API
- * @returns Transformed requirements object
+ * Transform an array of database job rows to frontend Job format
+ *
+ * @param dbJobs - Array of job rows from the database
+ * @returns Array of transformed Job objects
  */
-const transformRequirements = (
-  apiRequirements?: ApiRequirements
-): { mustHave: string[]; niceToHave: string[] } => {
-  if (!apiRequirements) return { mustHave: [], niceToHave: [] }
+export function transformJobs(dbJobs: JobSearchResult[]): Job[] {
+  return dbJobs.map(transformJob)
+}
+
+// =============================================================================
+// Search Response Transformation
+// =============================================================================
+
+/**
+ * Parameters for building a search response
+ */
+export interface TransformSearchResponseParams {
+  /** Raw job results from the database */
+  jobs: JobSearchResult[]
+  /** Total count of matching jobs */
+  totalCount: number
+  /** Current page number (1-indexed) */
+  page: number
+  /** Number of results per page */
+  pageSize: number
+}
+
+/**
+ * Transform search results to frontend SearchResponse format
+ *
+ * @param params - Search results and pagination info
+ * @returns Complete SearchResponse for frontend use
+ */
+export function transformSearchResponse(
+  params: TransformSearchResponseParams
+): SearchResponse {
+  const { jobs, totalCount, page, pageSize } = params
+  const offset = (page - 1) * pageSize
+  const hasMore = offset + jobs.length < totalCount
 
   return {
-    mustHave: apiRequirements.must_have ?? [],
-    niceToHave: apiRequirements.nice_to_have ?? [],
+    jobs: transformJobs(jobs),
+    pagination: {
+      total: totalCount,
+      limit: pageSize,
+      offset,
+      hasMore,
+    },
   }
 }
 
 /**
- * Transform posted date from API format to display format
- * @param apiPostedAt - ISO date string from API
- * @returns Human-readable date string
+ * Create an empty search response (for error cases or no results)
+ *
+ * @param page - Current page number
+ * @param pageSize - Number of results per page
+ * @returns Empty SearchResponse with zero results
  */
-const transformPostedDate = (apiPostedAt?: string): string => {
-  if (!apiPostedAt) return 'unknown'
+export function createEmptySearchResponse(
+  page: number = 1,
+  pageSize: number = 20
+): SearchResponse {
+  return {
+    jobs: [],
+    pagination: {
+      total: 0,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+      hasMore: false,
+    },
+  }
+}
 
+// =============================================================================
+// Date Formatting
+// =============================================================================
+
+/**
+ * Format a date string as a relative time (e.g., "2 days ago")
+ *
+ * @param dateString - ISO date string from the database
+ * @returns Human-readable relative date string
+ */
+export function formatRelativeDate(dateString: string): string {
   try {
-    const postedDate = new Date(apiPostedAt)
+    const date = new Date(dateString)
     const now = new Date()
-    const diffInMs = now.getTime() - postedDate.getTime()
+    const diffInMs = now.getTime() - date.getTime()
+
+    // Handle negative differences (future dates)
+    if (diffInMs < 0) {
+      return 'just now'
+    }
+
     const diffInMinutes = Math.floor(diffInMs / (1000 * 60))
     const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60))
     const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
 
-    // Handle same day posts with hour precision
+    // Same day - show hours/minutes
     if (diffInDays === 0) {
       if (diffInMinutes <= 1) return '1 minute ago'
       if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`
@@ -87,61 +167,49 @@ const transformPostedDate = (apiPostedAt?: string): string => {
       return `${diffInHours} hours ago`
     }
 
+    // Days
     if (diffInDays === 1) return '1 day ago'
     if (diffInDays < 7) return `${diffInDays} days ago`
+
+    // Weeks
     if (diffInDays < 14) return '1 week ago'
     if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`
-    if (diffInDays < 60) return '1 month ago'
 
+    // Months
+    if (diffInDays < 60) return '1 month ago'
     return `${Math.floor(diffInDays / 30)} months ago`
   } catch (error) {
-    const logContext: LogContext = {
+    logger.warn('Error parsing date', {
       component: 'transformer',
-      action: 'date-transformation',
-      apiPostedAt,
-      errorType: error instanceof Error ? error.name : 'unknown',
-      inputValue: apiPostedAt,
-      ...(error instanceof Error && {
-        errorMessage: error.message,
-        errorStack: error.stack,
-      }),
-    }
-
-    logger.warn('Error parsing posted date', logContext)
+      action: 'formatRelativeDate',
+      dateString,
+      error: error instanceof Error ? error.message : 'unknown',
+    })
     return 'unknown'
   }
 }
 
 /**
- * Transform array of jobs from API format to frontend format
- * @param apiJobs - Array of job objects from API
- * @returns Array of transformed job objects
+ * Format a date string as an absolute date (e.g., "Jan 15, 2024")
+ *
+ * @param dateString - ISO date string from the database
+ * @returns Formatted absolute date string
  */
-export const transformJobs = (apiJobs?: ApiJob[]): Job[] => {
-  if (!Array.isArray(apiJobs)) return []
-
-  return apiJobs.map(transformJob).filter(Boolean) as Job[] // Filter out any null results
-}
-
-/**
- * Transform API search response to frontend format
- * @param apiResponse - Complete API response
- * @returns Transformed response object
- */
-export const transformSearchResponse = (
-  apiResponse?: ApiSearchResponse
-): SearchResponse => {
-  if (!apiResponse) return { jobs: [], pagination: null }
-
-  return {
-    jobs: transformJobs(apiResponse.data),
-    pagination: apiResponse.pagination
-      ? {
-          total: apiResponse.pagination?.total ?? 0,
-          limit: apiResponse.pagination?.limit ?? 20,
-          offset: apiResponse.pagination?.offset ?? 0,
-          hasMore: apiResponse.pagination?.has_more ?? false,
-        }
-      : null,
+export function formatAbsoluteDate(dateString: string): string {
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  } catch (error) {
+    logger.warn('Error formatting date', {
+      component: 'transformer',
+      action: 'formatAbsoluteDate',
+      dateString,
+      error: error instanceof Error ? error.message : 'unknown',
+    })
+    return 'unknown'
   }
 }

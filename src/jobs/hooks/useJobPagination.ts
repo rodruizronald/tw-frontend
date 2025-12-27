@@ -1,31 +1,44 @@
+/**
+ * useJobPagination Hook
+ *
+ * Manages pagination state for job search results.
+ * Handles URL synchronization, page changes, and job selection.
+ */
+
 import { useEffect, useMemo, useState } from 'react'
 import type { SetURLSearchParams } from 'react-router-dom'
 import { useSearchParams } from 'react-router-dom'
 
 import { PAGINATION } from '../constants'
-import type { FilterState } from '../constants/defaultFilters'
 import type { Job } from '../types/models'
-import type { PaginationParams } from '../types/pagination'
 
-interface ApiPagination {
+// =============================================================================
+// Types
+// =============================================================================
+
+/**
+ * Pagination metadata from the API
+ */
+export interface ApiPagination {
   total: number
   limit: number
   offset: number
   hasMore: boolean
 }
 
-// Define SearchState interface based on what searchJobs returns
-interface SearchState {
-  jobs: Job[]
-  pagination: ApiPagination | null
-  lastSearchParams?: string | null
-  error?: {
-    message: string
-    type: string
-  }
-}
+/**
+ * Search function type - accepts any filter format
+ */
+export type SearchFunction = (
+  searchQuery: string,
+  filters: unknown,
+  pagination: { page?: number; pageSize?: number }
+) => Promise<{ jobs: Job[]; pagination: ApiPagination | null }>
 
-interface UseJobPaginationReturn {
+/**
+ * Return type for the useJobPagination hook
+ */
+export interface UseJobPaginationReturn {
   currentPage: number
   totalPages: number
   totalJobs: number
@@ -37,16 +50,25 @@ interface UseJobPaginationReturn {
   setSearchParams: SetURLSearchParams
 }
 
+// =============================================================================
+// Hook Implementation
+// =============================================================================
+
+/**
+ * Hook for managing job search pagination
+ *
+ * @param apiJobs - Current page of jobs from the API
+ * @param apiPagination - Pagination metadata from the API
+ * @param searchJobs - Function to execute searches
+ * @param searchQuery - Current search query string
+ * @param activeFilters - Current active filters (any format)
+ */
 export function useJobPagination(
   apiJobs: Job[],
   apiPagination: ApiPagination | null,
-  searchJobs: (
-    searchQuery: string,
-    filters: Partial<FilterState>,
-    pagination: PaginationParams
-  ) => Promise<SearchState>,
+  searchJobs: SearchFunction,
   searchQuery: string,
-  activeFilters: Partial<FilterState>
+  activeFilters: unknown
 ): UseJobPaginationReturn {
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)

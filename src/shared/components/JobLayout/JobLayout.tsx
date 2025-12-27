@@ -1,10 +1,15 @@
 import { JobDetails, JobFilters, JobList } from '@jobs/components'
 import { FILTER_OPTIONS, PAGINATION } from '@jobs/constants'
-import { useJobFilters, useJobPagination, useJobSearch } from '@jobs/hooks'
+import {
+  convertLegacyFilters,
+  useJobFilters,
+  useJobPagination,
+  useJobSearch,
+} from '@jobs/hooks'
 import { Job } from '@jobs/types/models'
 import { Box } from '@mui/material'
 import type { ReactElement } from 'react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import Header from '../Header'
 
@@ -35,7 +40,7 @@ export default function JobLayout(): ReactElement {
     jobs: apiJobs,
     pagination: apiPagination,
     isFetching,
-    searchJobs,
+    search,
   } = useJobSearch()
 
   // Use job filters hook
@@ -47,6 +52,20 @@ export default function JobLayout(): ReactElement {
     handleFilterChange,
     getActiveFilterCount,
   } = useJobFilters()
+
+  // Wrapper to adapt the new search API to the old pagination hook interface
+  const searchJobsAdapter = useCallback(
+    async (
+      query: string,
+      _filters: unknown,
+      pagination: { page?: number; pageSize?: number }
+    ) => {
+      const filters = convertLegacyFilters(query, {})
+      const result = await search(filters, pagination)
+      return result
+    },
+    [search]
+  )
 
   // Use server-side pagination hook
   const {
@@ -62,7 +81,7 @@ export default function JobLayout(): ReactElement {
   } = useJobPagination(
     apiJobs,
     apiPagination,
-    searchJobs,
+    searchJobsAdapter,
     searchQuery,
     activeFilters
   )
@@ -72,7 +91,10 @@ export default function JobLayout(): ReactElement {
     resetToPageOne(setSearchParams)
 
     try {
-      await searchJobs(searchQuery, activeFilters, {
+      // Convert legacy filters to new format
+      const filters = convertLegacyFilters(searchQuery, {})
+
+      await search(filters, {
         page: PAGINATION.DEFAULT_PAGE, // Always start from page 1 for new searches
         pageSize: PAGINATION.PAGE_SIZE,
       })
