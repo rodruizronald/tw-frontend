@@ -165,7 +165,7 @@ export function handleUnknownError(error: unknown): SupabaseAppError {
   }
 
   // Handle network errors
-  if (error instanceof TypeError && error.message?.includes('fetch')) {
+  if (error instanceof TypeError && error.message.includes('fetch')) {
     return {
       message: ERROR_MESSAGES.CONNECTION_ERROR,
       type: 'CONNECTION_ERROR',
