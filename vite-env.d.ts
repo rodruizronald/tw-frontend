@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_LOG_LEVEL: string
   readonly VITE_LOG_ENDPOINT: string
   readonly VITE_LOG_API_KEY: string
+  readonly VITE_SUPABASE_URL: string
+  readonly VITE_SUPABASE_PUBLISHABLE_KEY: string
 }
 
 interface ImportMeta {
