@@ -1,71 +1,135 @@
-import type { ApiError } from '@services/api/client'
-import { apiClient } from '@services/api/client'
+/**
+ * Job Service
+ *
+ * High-level service layer for job-related operations.
+ * Orchestrates repository calls and transforms data to frontend format.
+ */
 
-import type { FilterState } from '../constants/defaultFilters'
-import type { ApiSearchResponse } from '../types/api'
-import type { SearchResponse } from '../types/models'
-import type { PaginationParams } from '../types/pagination'
-import { buildApiParams } from './paramsBuilder'
-import { transformSearchResponse } from './transformer'
+import type { SupabaseAppError } from '@/services/supabase/errors'
+
+import type { JobSearchFilters, JobSearchPagination } from '../types/filters'
+import { toSearchJobsRpcParams } from '../types/filters'
+import type { Job, SearchResponse } from '../types/models'
+import { searchJobs as searchJobsRepository } from './jobRepository'
+import {
+  createEmptySearchResponse,
+  transformSearchResponse,
+} from './transformer'
+
+// =============================================================================
+// Types
+// =============================================================================
 
 /**
- * Extended search response with possible error
+ * Search response with optional error information
  */
-interface SearchResponseWithError extends SearchResponse {
-  error?: ApiError
+export interface JobSearchResponse extends SearchResponse {
+  /** Error details if the search failed */
+  error?: SupabaseAppError
 }
 
 /**
- * Job API service
+ * Result of fetching a single job
  */
-class JobService {
-  /**
-   * Search for jobs using the API
-   * @param searchQuery - The search query
-   * @param filters - The active filters
-   * @param pagination - Pagination parameters
-   * @returns API response promise
-   */
-  async searchJobs(
-    searchQuery: string,
-    filters: Partial<FilterState> = {},
-    pagination: PaginationParams = {}
-  ): Promise<SearchResponseWithError> {
-    try {
-      // TEMPORARY: Add 2-second delay for testing fade effect
-      // TODO: Remove this delay before production
-      await new Promise(resolve => setTimeout(resolve, 2000))
+export interface JobDetailResponse {
+  /** The job if found */
+  job: Job | null
+  /** Error details if the fetch failed */
+  error?: SupabaseAppError
+}
 
-      // Build API parameters
-      const apiParams = buildApiParams(searchQuery, filters, pagination)
+// =============================================================================
+// Search Operations
+// =============================================================================
 
-      // Make the API call using ApiClient
-      const rawData = await apiClient.get<ApiSearchResponse>('/jobs', {
-        params: apiParams,
-      })
+/**
+ * Search for jobs with filters and pagination
+ *
+ * This is the main entry point for job searches. It:
+ * 1. Converts frontend filters to RPC parameters
+ * 2. Calls the repository to execute the search
+ * 3. Transforms the results to frontend format
+ * 4. Handles errors gracefully
+ *
+ * @param filters - Search filters including the query string
+ * @param pagination - Pagination options (page, pageSize)
+ * @returns Search results with jobs, pagination, and optional error
+ *
+ * @example
+ * ```typescript
+ * const result = await searchJobs(
+ *   {
+ *     query: 'react developer',
+ *     experienceLevel: 'senior',
+ *     workMode: 'remote',
+ *   },
+ *   { page: 1, pageSize: 20 }
+ * )
+ *
+ * if (result.error) {
+ *   console.error('Search failed:', result.error.message)
+ * } else {
+ *   console.log(`Found ${result.pagination?.total} jobs`)
+ *   result.jobs.forEach(job => console.log(job.title))
+ * }
+ * ```
+ */
+export async function searchJobs(
+  filters: JobSearchFilters,
+  pagination: JobSearchPagination = {}
+): Promise<JobSearchResponse> {
+  const page = pagination.page ?? 1
+  const pageSize = pagination.pageSize ?? 20
 
-      // Transform response to frontend format
-      const transformedData = transformSearchResponse(rawData)
+  // Convert frontend filters to RPC parameters
+  const rpcParams = toSearchJobsRpcParams(filters, { page, pageSize })
 
-      return transformedData
-    } catch (error) {
-      // ApiClient already handles error transformation
-      const apiError = error as ApiError
+  // Execute the search via repository
+  const result = await searchJobsRepository(rpcParams)
 
-      return {
-        jobs: [],
-        pagination: {
-          total: 0,
-          limit: pagination.pageSize ?? 20,
-          offset: ((pagination.page ?? 1) - 1) * (pagination.pageSize ?? 20),
-          hasMore: false,
-        },
-        error: apiError,
-      }
+  // Handle errors
+  if (result.error) {
+    return {
+      ...createEmptySearchResponse(page, pageSize),
+      error: result.error,
     }
   }
+
+  // Transform and return successful results
+  return transformSearchResponse({
+    jobs: result.data,
+    totalCount: result.totalCount,
+    page,
+    pageSize,
+  })
 }
 
-// Export singleton instance
-export const jobService = new JobService()
+// =============================================================================
+// Service Object (Alternative API)
+// =============================================================================
+
+/**
+ * Job service object
+ *
+ * Provides an object-based API for job operations.
+ * Use this if you prefer dependency injection or method organization.
+ *
+ * @example
+ * ```typescript
+ * import { jobService } from '@/jobs/api/jobService'
+ *
+ * const result = await jobService.search(
+ *   { query: 'developer' },
+ *   { page: 1 }
+ * )
+ * ```
+ */
+export const jobService = {
+  /**
+   * Search for jobs
+   * @see searchJobs
+   */
+  search: searchJobs,
+} as const
+
 export default jobService
