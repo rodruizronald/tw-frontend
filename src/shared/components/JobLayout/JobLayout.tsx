@@ -162,30 +162,36 @@ export default function JobLayout(): ReactElement {
     [openDropdown]
   )
 
-  // Track if filters changed (not on initial render)
-  const isFirstRender = useRef(true)
-  const prevFiltersRef = useRef(filters)
+  // Track previous filters to detect changes
+  const prevFiltersJsonRef = useRef<string>('')
 
-  // Re-search when filters change (after initial search)
+  // Re-search when filters change (after initial search has been performed)
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
+    // Skip if no search has been performed yet
+    if (!appliedSearchQuery) {
       return
     }
 
-    if (appliedSearchQuery && prevFiltersRef.current !== filters) {
-      const searchFilters = {
-        ...filters,
-        query: appliedSearchQuery,
-      }
-      search(searchFilters, {
-        page: PAGINATION.DEFAULT_PAGE,
-        pageSize: PAGINATION.PAGE_SIZE,
-      })
+    // Compare filters by JSON to detect actual changes
+    const currentFiltersJson = JSON.stringify(filters)
+    if (prevFiltersJsonRef.current === currentFiltersJson) {
+      return
     }
 
-    prevFiltersRef.current = filters
-  }, [filters, appliedSearchQuery, search])
+    // Update ref and trigger search
+    prevFiltersJsonRef.current = currentFiltersJson
+
+    const searchFilters = {
+      ...filters,
+      query: appliedSearchQuery,
+    }
+
+    search(searchFilters, {
+      page: PAGINATION.DEFAULT_PAGE,
+      pageSize: PAGINATION.PAGE_SIZE,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, appliedSearchQuery]) // search is stable from useJobSearch
 
   // ==========================================================================
   // Render
