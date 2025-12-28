@@ -1,45 +1,100 @@
-import { useState } from 'react'
+/**
+ * JobFilters Component
+ *
+ * Renders all filter dropdown menus based on filter configuration.
+ * This component is responsible for rendering FilterMenuContainer
+ * for each filter type.
+ */
 
-import type { FilterState } from '../../constants/defaultFilters'
-import type { FilterOptions } from '../../constants/filterOptions'
-import type { DateValue } from '../../constants/filterOptions'
-import type { FilterType } from '../../constants/filterTypes'
+import type { CompanyOption } from '../../hooks/useCompanyOptions'
+import type { Language } from '../../types/enums'
+import type {
+  DatePreset,
+  FilterKey,
+  JobSearchFilters,
+  MultiSelectFilterKey,
+} from '../../types/filters'
+import { FILTER_CONFIG } from './filterConfig'
 import FilterMenuContainer from './FilterMenuContainer'
 
-// Type for anchor elements (HTML elements, not filter values)
-type AnchorElements = Record<FilterType, HTMLElement | null>
+// =============================================================================
+// Types
+// =============================================================================
 
 interface JobFiltersProps {
-  filterOptions: FilterOptions
-  activeFilters: FilterState
-  onFilterChange: (filterType: FilterType, value: string | DateValue) => void
-  anchorEls: AnchorElements
-  onMenuClose: (filter: FilterType) => void
+  /** Current filter values */
+  filters: Partial<JobSearchFilters>
+  /** Anchor elements for each filter dropdown */
+  anchorEls: Record<FilterKey, HTMLElement | null>
+  /** Close handler for dropdowns */
+  onCloseDropdown: (key: FilterKey) => void
+  /** Toggle handler for multi-select filters */
+  onToggleFilter: (key: MultiSelectFilterKey, value: string) => void
+  /** Set handler for date preset filter */
+  onSetDatePreset: (key: 'datePreset', value: DatePreset) => void
+  /** Set handler for language filter */
+  onSetLanguage: (value: Language) => void
+  /** Company options for the company filter */
+  companyOptions?: CompanyOption[] | undefined
+  /** Whether company options are loading */
+  isLoadingCompanies?: boolean | undefined
 }
 
-export default function JobFilters({
-  filterOptions,
-  activeFilters,
-  onFilterChange,
-  anchorEls,
-  onMenuClose,
-}: JobFiltersProps) {
-  const [companySearchInput, setCompanySearchInput] = useState('')
+// =============================================================================
+// Component
+// =============================================================================
 
+/**
+ * Job filters component that renders all filter dropdown menus
+ *
+ * @example
+ * ```tsx
+ * <JobFilters
+ *   filters={filters}
+ *   anchorEls={anchorEls}
+ *   onCloseDropdown={closeDropdown}
+ *   onToggleFilter={toggleFilter}
+ *   onSetDatePreset={(value) => setFilter('datePreset', value)}
+ *   onSetLanguage={(value) => setFilter('language', value)}
+ *   companyOptions={companies}
+ *   isLoadingCompanies={isLoadingCompanies}
+ * />
+ * ```
+ */
+export default function JobFilters({
+  filters,
+  anchorEls,
+  onCloseDropdown,
+  onToggleFilter,
+  onSetDatePreset,
+  onSetLanguage,
+  companyOptions = [],
+  isLoadingCompanies = false,
+}: JobFiltersProps) {
   return (
     <>
-      {(Object.keys(filterOptions) as FilterType[]).map(filter => (
+      {FILTER_CONFIG.map(config => (
         <FilterMenuContainer
-          key={filter}
-          filter={filter}
-          anchorEl={anchorEls[filter]}
-          open={Boolean(anchorEls[filter])}
-          onClose={() => onMenuClose(filter)}
-          filterOptions={filterOptions}
-          activeFilters={activeFilters}
-          onFilterChange={onFilterChange}
-          companySearchInput={companySearchInput}
-          onCompanySearchChange={setCompanySearchInput}
+          key={config.key}
+          filterKey={config.key}
+          anchorEl={anchorEls[config.key]}
+          open={Boolean(anchorEls[config.key])}
+          onClose={() => onCloseDropdown(config.key)}
+          filterValues={{
+            datePreset: filters.datePreset,
+            experienceLevel: filters.experienceLevel,
+            employmentType: filters.employmentType,
+            workMode: filters.workMode,
+            province: filters.province,
+            jobFunction: filters.jobFunction,
+            company: filters.company,
+            language: filters.language,
+          }}
+          onToggleFilter={onToggleFilter}
+          onSetFilter={onSetDatePreset}
+          onSetLanguage={onSetLanguage}
+          companyOptions={companyOptions}
+          isLoadingCompanies={isLoadingCompanies}
         />
       ))}
     </>
