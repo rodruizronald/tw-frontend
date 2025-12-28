@@ -134,17 +134,13 @@ export function useJobFilters(
 ): UseJobFiltersReturn {
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // Initialize filters from URL or empty state
-  const initialFilters = useMemo((): Partial<JobSearchFilters> => {
+  // Filter state - initialize from URL on mount
+  const [filters, setFilters] = useState<Partial<JobSearchFilters>>(() => {
     if (syncWithUrl) {
       return urlParamsToFilters(searchParams)
     }
     return {}
-  }, []) // Only run on mount
-
-  // Filter state
-  const [filters, setFilters] =
-    useState<Partial<JobSearchFilters>>(initialFilters)
+  })
 
   // Anchor elements for dropdowns
   const [anchorEls, setAnchorEls] = useState<AnchorElements>(INITIAL_ANCHORS)
