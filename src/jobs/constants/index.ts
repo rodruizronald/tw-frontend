@@ -1,4 +1,8 @@
-export * from './defaultFilters'
-export * from './filterOptions'
-export * from './filterTypes'
+/**
+ * Jobs Constants Module
+ *
+ * Contains application constants for the jobs feature.
+ * Filter-related constants have been moved to src/jobs/types/enums.ts
+ */
+
 export * from './pagination'

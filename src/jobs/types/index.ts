@@ -3,25 +3,12 @@
  *
  * This module exports all types related to jobs, including:
  * - Frontend models (Job, SearchResponse)
- * - API types (ApiJob, ApiSearchResponse)
  * - Enum types (ExperienceLevel, WorkMode, etc.)
- * - Filter types (JobSearchFilters, FilterState)
- * - Pagination types
+ * - Filter types (JobSearchFilters, JobSearchPagination)
  */
 
 // Models
 export type { Job, SearchResponse } from './models'
-
-// API types
-export type {
-  ApiJob,
-  ApiParams,
-  ApiRequirements,
-  ApiSearchResponse,
-  ApiTechnology,
-  DateRange,
-  SearchParams,
-} from './api'
 
 // Enums and their utilities
 export type {
@@ -79,6 +66,3 @@ export {
   hasMorePages,
   toSearchJobsRpcParams,
 } from './filters'
-
-// Pagination
-export type { PaginationParams } from './pagination'
