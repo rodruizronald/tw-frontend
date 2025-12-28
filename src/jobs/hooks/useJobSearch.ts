@@ -12,11 +12,7 @@ import { useLogger } from '@/services/logging'
 import type { SupabaseAppError } from '@/services/supabase/errors'
 
 import { searchJobs as searchJobsApi } from '../api/jobService'
-import type {
-  FilterState,
-  JobSearchFilters,
-  JobSearchPagination,
-} from '../types/filters'
+import type { JobSearchFilters, JobSearchPagination } from '../types/filters'
 import type { Job } from '../types/models'
 
 // =============================================================================
@@ -96,14 +92,12 @@ function createQueryKey(
     params.filters.query,
     params.filters.experienceLevel,
     params.filters.employmentType,
-    params.filters.location,
     params.filters.workMode,
     params.filters.province,
     params.filters.jobFunction,
     params.filters.language,
     params.filters.company,
-    params.filters.dateFrom,
-    params.filters.dateTo,
+    params.filters.datePreset,
     params.pagination.page,
     params.pagination.pageSize,
   ] as const
@@ -122,7 +116,7 @@ function createQueryKey(
  *
  * // Execute search
  * await search(
- *   { query: 'react developer', experienceLevel: 'senior' },
+ *   { query: 'react developer', experienceLevel: ['senior'] },
  *   { page: 1, pageSize: 20 }
  * )
  *
@@ -164,6 +158,9 @@ export function useJobSearch(): UseJobSearchReturn {
           workMode: filters.workMode,
           province: filters.province,
           jobFunction: filters.jobFunction,
+          language: filters.language,
+          company: filters.company,
+          datePreset: filters.datePreset,
         },
         pagination,
       })
@@ -331,48 +328,4 @@ export function useJobSearch(): UseJobSearchReturn {
     clearSearch,
     retrySearch,
   }
-}
-
-// =============================================================================
-// Utility: Convert Legacy FilterState to JobSearchFilters
-// =============================================================================
-
-/**
- * Convert legacy FilterState to the new JobSearchFilters format
- *
- * This utility helps migrate from the old filter format to the new one.
- * Use this when integrating with components that still use the old format.
- *
- * @param query - The search query string
- * @param legacyFilters - Filters in the old FilterState format
- * @returns Filters in the new JobSearchFilters format
- */
-export function convertLegacyFilters(
-  query: string,
-  legacyFilters: Partial<FilterState>
-): JobSearchFilters {
-  // Build the filters object, only including defined values
-  const filters: JobSearchFilters = { query }
-
-  if (legacyFilters.experienceLevel !== undefined)
-    filters.experienceLevel = legacyFilters.experienceLevel
-  if (legacyFilters.employmentType !== undefined)
-    filters.employmentType = legacyFilters.employmentType
-  if (legacyFilters.location !== undefined)
-    filters.location = legacyFilters.location
-  if (legacyFilters.workMode !== undefined)
-    filters.workMode = legacyFilters.workMode
-  if (legacyFilters.province !== undefined)
-    filters.province = legacyFilters.province
-  if (legacyFilters.jobFunction !== undefined)
-    filters.jobFunction = legacyFilters.jobFunction
-  if (legacyFilters.language !== undefined)
-    filters.language = legacyFilters.language
-  if (legacyFilters.company !== undefined)
-    filters.company = legacyFilters.company
-  if (legacyFilters.dateFrom !== undefined)
-    filters.dateFrom = legacyFilters.dateFrom
-  if (legacyFilters.dateTo !== undefined) filters.dateTo = legacyFilters.dateTo
-
-  return filters
 }

@@ -5,11 +5,12 @@
  * Handles URL synchronization, page changes, and job selection.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { SetURLSearchParams } from 'react-router-dom'
 import { useSearchParams } from 'react-router-dom'
 
 import { PAGINATION } from '../constants'
+import type { JobSearchFilters, JobSearchPagination } from '../types/filters'
 import type { Job } from '../types/models'
 
 // =============================================================================
@@ -27,26 +28,34 @@ export interface ApiPagination {
 }
 
 /**
- * Search function type - accepts any filter format
+ * Search function type for pagination
  */
 export type SearchFunction = (
-  searchQuery: string,
-  filters: unknown,
-  pagination: { page?: number; pageSize?: number }
+  filters: JobSearchFilters,
+  pagination?: JobSearchPagination
 ) => Promise<{ jobs: Job[]; pagination: ApiPagination | null }>
 
 /**
  * Return type for the useJobPagination hook
  */
 export interface UseJobPaginationReturn {
+  /** Current page number (1-indexed) */
   currentPage: number
+  /** Total number of pages */
   totalPages: number
+  /** Total number of jobs matching the search */
   totalJobs: number
+  /** Jobs for the current page */
   currentPageJobs: Job[]
+  /** Currently selected job */
   selectedJob: Job | null
+  /** ID of the selected job */
   selectedJobId: string | null
+  /** Set the selected job by ID */
   setSelectedJobId: (id: string | null) => void
+  /** Handle page change */
   handlePageChange: (newPage: number) => Promise<void>
+  /** URL search params setter */
   setSearchParams: SetURLSearchParams
 }
 
@@ -60,22 +69,33 @@ export interface UseJobPaginationReturn {
  * @param apiJobs - Current page of jobs from the API
  * @param apiPagination - Pagination metadata from the API
  * @param searchJobs - Function to execute searches
- * @param searchQuery - Current search query string
- * @param activeFilters - Current active filters (any format)
+ * @param currentFilters - Current active filters
+ *
+ * @example
+ * ```typescript
+ * const {
+ *   currentPage,
+ *   totalPages,
+ *   handlePageChange,
+ *   selectedJob,
+ * } = useJobPagination(jobs, pagination, search, filters)
+ *
+ * // Change page
+ * await handlePageChange(2)
+ * ```
  */
 export function useJobPagination(
   apiJobs: Job[],
   apiPagination: ApiPagination | null,
   searchJobs: SearchFunction,
-  searchQuery: string,
-  activeFilters: unknown
+  currentFilters: JobSearchFilters
 ): UseJobPaginationReturn {
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
   // Get current page from URL, default to 1
   const currentPage =
-    parseInt(searchParams.get('p') ?? '') || PAGINATION.DEFAULT_PAGE
+    parseInt(searchParams.get('p') ?? '', 10) || PAGINATION.DEFAULT_PAGE
 
   // Calculate pagination values from API metadata
   const totalJobs = apiPagination?.total ?? 0
@@ -86,28 +106,33 @@ export function useJobPagination(
   // For server-side pagination, currentPageJobs = all apiJobs
   const currentPageJobs = apiJobs
 
-  // Handle page change - make new API call
-  const handlePageChange = async (newPage: number): Promise<void> => {
-    const newSearchParams = new URLSearchParams(searchParams)
+  /**
+   * Handle page change - update URL and make new API call
+   */
+  const handlePageChange = useCallback(
+    async (newPage: number): Promise<void> => {
+      const newSearchParams = new URLSearchParams(searchParams)
 
-    if (newPage === PAGINATION.DEFAULT_PAGE) {
-      newSearchParams.delete('p')
-    } else {
-      newSearchParams.set('p', newPage.toString())
-    }
+      if (newPage === PAGINATION.DEFAULT_PAGE) {
+        newSearchParams.delete('p')
+      } else {
+        newSearchParams.set('p', newPage.toString())
+      }
 
-    setSearchParams(newSearchParams)
+      setSearchParams(newSearchParams)
 
-    // Make API call for new page
-    try {
-      await searchJobs(searchQuery, activeFilters, {
-        page: newPage,
-        pageSize: PAGINATION.PAGE_SIZE,
-      })
-    } catch (error) {
-      console.error('Failed to fetch page:', error)
-    }
-  }
+      // Make API call for new page
+      try {
+        await searchJobs(currentFilters, {
+          page: newPage,
+          pageSize: PAGINATION.PAGE_SIZE,
+        })
+      } catch (error) {
+        console.error('Failed to fetch page:', error)
+      }
+    },
+    [searchParams, setSearchParams, searchJobs, currentFilters]
+  )
 
   // Auto-select first job when jobs change and no job is selected
   useEffect(() => {
@@ -132,4 +157,44 @@ export function useJobPagination(
     handlePageChange,
     setSearchParams,
   }
+}
+
+// =============================================================================
+// URL Utilities
+// =============================================================================
+
+/**
+ * Parse page number from URL search params
+ *
+ * @param params - URLSearchParams object
+ * @returns Page number (1 if not specified or invalid)
+ */
+export function urlParamsToPage(params: URLSearchParams): number {
+  const pageStr = params.get('p')
+  if (!pageStr) return PAGINATION.DEFAULT_PAGE
+
+  const page = parseInt(pageStr, 10)
+  return isNaN(page) || page < 1 ? PAGINATION.DEFAULT_PAGE : page
+}
+
+/**
+ * Create URL search params with pagination
+ *
+ * @param page - Page number to set
+ * @param existingParams - Existing params to preserve
+ * @returns Updated URLSearchParams
+ */
+export function paginationToURLParams(
+  page: number,
+  existingParams?: URLSearchParams
+): URLSearchParams {
+  const params = new URLSearchParams(existingParams)
+
+  if (page === PAGINATION.DEFAULT_PAGE) {
+    params.delete('p')
+  } else {
+    params.set('p', page.toString())
+  }
+
+  return params
 }
