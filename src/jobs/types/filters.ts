@@ -1,37 +1,95 @@
 /**
- * Job search filter types
+ * Job Search Filter Types
  *
  * These types define the structure for job search parameters
- * used throughout the application.
+ * used throughout the application. Supports multi-select filters
+ * and URL persistence.
  */
+
+import { subDays } from 'date-fns'
 
 import type {
   EmploymentType,
   ExperienceLevel,
   JobFunction,
   Language,
-  Location,
   Province,
   WorkMode,
 } from './enums'
 
 // =============================================================================
-// Search Filter Types
+// Date Preset Types
+// =============================================================================
+
+/**
+ * Date preset options for the date filter (radio buttons)
+ */
+export type DatePreset = 'any' | 'month' | 'week' | '24hours'
+
+/**
+ * Date preset configuration with labels
+ */
+export const DATE_PRESETS: Array<{ value: DatePreset; label: string }> = [
+  { value: 'any', label: 'Any time' },
+  { value: 'month', label: 'Past month' },
+  { value: 'week', label: 'Past week' },
+  { value: '24hours', label: 'Past 24 hours' },
+]
+
+/**
+ * Convert a date preset to actual date range
+ * @param preset - The date preset selected
+ * @returns Object with dateFrom and dateTo ISO strings, or null for 'any'
+ */
+export function datePresetToRange(
+  preset: DatePreset
+): { dateFrom: string; dateTo: string } | null {
+  const now = new Date()
+  const formatDate = (date: Date): string => date.toISOString()
+
+  switch (preset) {
+    case '24hours':
+      return {
+        dateFrom: formatDate(subDays(now, 1)),
+        dateTo: formatDate(now),
+      }
+    case 'week':
+      return {
+        dateFrom: formatDate(subDays(now, 7)),
+        dateTo: formatDate(now),
+      }
+    case 'month':
+      return {
+        dateFrom: formatDate(subDays(now, 30)),
+        dateTo: formatDate(now),
+      }
+    case 'any':
+    default:
+      // 'any' defaults to last 90 days
+      return {
+        dateFrom: formatDate(subDays(now, 90)),
+        dateTo: formatDate(now),
+      }
+  }
+}
+
+// =============================================================================
+// Search Filter Types (Multi-Select)
 // =============================================================================
 
 /**
  * Job search filters interface
  *
- * All filters are optional except for `query` which is required
- * for full-text search operations.
+ * Multi-select filters use arrays. Single-select filters use single values.
+ * All filters are optional except for `query` which is required.
  *
  * @example
  * ```typescript
  * const filters: JobSearchFilters = {
  *   query: 'react developer',
- *   experienceLevel: 'senior',
- *   workMode: 'remote',
- *   province: 'san-jose',
+ *   experienceLevel: ['senior', 'mid-level'],
+ *   workMode: ['remote'],
+ *   province: ['san-jose', 'heredia'],
  * }
  * ```
  */
@@ -43,63 +101,44 @@ export interface JobSearchFilters {
   query: string
 
   /**
-   * Filter by experience level
-   * e.g., 'entry-level', 'mid-level', 'senior'
+   * Filter by experience levels (multi-select)
    */
-  experienceLevel?: ExperienceLevel
+  experienceLevel?: ExperienceLevel[]
 
   /**
-   * Filter by employment type
-   * e.g., 'full-time', 'part-time', 'contractor'
+   * Filter by employment types (multi-select)
    */
-  employmentType?: EmploymentType
+  employmentType?: EmploymentType[]
 
   /**
-   * Filter by geographic location
-   * e.g., 'costa-rica', 'latam'
+   * Filter by work modes (multi-select)
    */
-  location?: Location
+  workMode?: WorkMode[]
 
   /**
-   * Filter by work mode/arrangement
-   * e.g., 'remote', 'hybrid', 'onsite'
+   * Filter by provinces (multi-select)
    */
-  workMode?: WorkMode
+  province?: Province[]
 
   /**
-   * Filter by province (Costa Rica)
-   * e.g., 'san-jose', 'heredia', 'alajuela'
+   * Filter by job functions (multi-select)
    */
-  province?: Province
+  jobFunction?: JobFunction[]
 
   /**
-   * Filter by job function/department
-   * e.g., 'technology-engineering', 'product-management'
+   * Filter by companies (multi-select)
    */
-  jobFunction?: JobFunction
+  company?: string[]
 
   /**
-   * Filter by job posting language
-   * e.g., 'english', 'spanish'
+   * Filter by language (single-select, radio button)
    */
   language?: Language
 
   /**
-   * Filter by company name (exact match, case-insensitive)
+   * Date preset selection (radio button)
    */
-  company?: string
-
-  /**
-   * Filter jobs created on or after this date
-   * ISO 8601 date string (e.g., '2024-01-01')
-   */
-  dateFrom?: string
-
-  /**
-   * Filter jobs created on or before this date
-   * ISO 8601 date string (e.g., '2024-12-31')
-   */
-  dateTo?: string
+  datePreset?: DatePreset
 }
 
 /**
@@ -128,33 +167,49 @@ export interface JobSearchParams {
 }
 
 // =============================================================================
-// Filter State Types (for UI components)
+// Filter Keys for UI
 // =============================================================================
 
 /**
- * Filter state for UI components
- * Similar to JobSearchFilters but all fields are optional
- * including query (for building filters before search)
+ * Filter key type for multi-select filters
  */
-export interface FilterState {
-  query?: string
-  experienceLevel?: ExperienceLevel
-  employmentType?: EmploymentType
-  location?: Location
-  workMode?: WorkMode
-  province?: Province
-  jobFunction?: JobFunction
-  language?: Language
-  company?: string
-  dateFrom?: string
-  dateTo?: string
-}
+export type MultiSelectFilterKey =
+  | 'experienceLevel'
+  | 'employmentType'
+  | 'workMode'
+  | 'province'
+  | 'jobFunction'
+  | 'company'
 
 /**
- * Active filter count type
- * Used to show badge counts on filter UI
+ * Filter key type for single-select filters
  */
-export type ActiveFilterKey = keyof Omit<FilterState, 'query'>
+export type SingleSelectFilterKey = 'language' | 'datePreset'
+
+/**
+ * All filter keys (excluding query)
+ */
+export type FilterKey = MultiSelectFilterKey | SingleSelectFilterKey
+
+/**
+ * List of all multi-select filter keys
+ */
+export const MULTI_SELECT_FILTER_KEYS: MultiSelectFilterKey[] = [
+  'experienceLevel',
+  'employmentType',
+  'workMode',
+  'province',
+  'jobFunction',
+  'company',
+]
+
+/**
+ * List of all single-select filter keys
+ */
+export const SINGLE_SELECT_FILTER_KEYS: SingleSelectFilterKey[] = [
+  'language',
+  'datePreset',
+]
 
 // =============================================================================
 // Supabase RPC Parameter Types
@@ -162,26 +217,41 @@ export type ActiveFilterKey = keyof Omit<FilterState, 'query'>
 
 /**
  * Parameters for the search_jobs RPC function
- * Maps to the PostgreSQL function parameters
+ * Maps to the PostgreSQL function parameters with array support
  */
 export interface SearchJobsRpcParams {
   search_query: string
   p_limit?: number | undefined
   p_offset?: number | undefined
-  p_experience_level?: ExperienceLevel | undefined
-  p_employment_type?: EmploymentType | undefined
-  p_location?: Location | undefined
-  p_work_mode?: WorkMode | undefined
-  p_province?: Province | undefined
-  p_job_function?: JobFunction | undefined
+  p_experience_level?: ExperienceLevel[] | undefined
+  p_employment_type?: EmploymentType[] | undefined
+  p_work_mode?: WorkMode[] | undefined
+  p_province?: Province[] | undefined
+  p_job_function?: JobFunction[] | undefined
+  p_company?: string[] | undefined
   p_language?: Language | undefined
-  p_company?: string | undefined
+  p_date_from?: string | undefined
+  p_date_to?: string | undefined
+}
+
+/**
+ * Parameters for the get_companies_for_search RPC function
+ */
+export interface GetCompaniesRpcParams {
+  search_query: string
+  p_limit?: number | undefined
+  p_experience_level?: ExperienceLevel[] | undefined
+  p_employment_type?: EmploymentType[] | undefined
+  p_work_mode?: WorkMode[] | undefined
+  p_province?: Province[] | undefined
+  p_job_function?: JobFunction[] | undefined
+  p_language?: Language | undefined
   p_date_from?: string | undefined
   p_date_to?: string | undefined
 }
 
 // =============================================================================
-// Utility Functions
+// Conversion Functions
 // =============================================================================
 
 /**
@@ -199,44 +269,230 @@ export function toSearchJobsRpcParams(
   const pageSize = pagination?.pageSize ?? 20
   const offset = (page - 1) * pageSize
 
+  // Convert date preset to actual dates
+  const dateRange = filters.datePreset
+    ? datePresetToRange(filters.datePreset)
+    : null
+
   return {
     search_query: filters.query,
     p_limit: pageSize,
     p_offset: offset,
-    p_experience_level: filters.experienceLevel,
-    p_employment_type: filters.employmentType,
-    p_location: filters.location,
-    p_work_mode: filters.workMode,
-    p_province: filters.province,
-    p_job_function: filters.jobFunction,
+    p_experience_level: filters.experienceLevel?.length
+      ? filters.experienceLevel
+      : undefined,
+    p_employment_type: filters.employmentType?.length
+      ? filters.employmentType
+      : undefined,
+    p_work_mode: filters.workMode?.length ? filters.workMode : undefined,
+    p_province: filters.province?.length ? filters.province : undefined,
+    p_job_function: filters.jobFunction?.length
+      ? filters.jobFunction
+      : undefined,
+    p_company: filters.company?.length ? filters.company : undefined,
     p_language: filters.language,
-    p_company: filters.company,
-    p_date_from: filters.dateFrom,
-    p_date_to: filters.dateTo,
+    p_date_from: dateRange?.dateFrom,
+    p_date_to: dateRange?.dateTo,
   }
 }
 
 /**
- * Count the number of active filters (excluding query)
+ * Convert JobSearchFilters to get_companies_for_search RPC parameters
+ * (Same as search params but without company filter)
+ *
+ * @param filters - The search filters from the UI
+ * @returns Parameters formatted for the get_companies_for_search RPC function
+ */
+export function toGetCompaniesRpcParams(
+  filters: JobSearchFilters
+): GetCompaniesRpcParams {
+  const dateRange = filters.datePreset
+    ? datePresetToRange(filters.datePreset)
+    : null
+
+  return {
+    search_query: filters.query,
+    p_limit: 100,
+    p_experience_level: filters.experienceLevel?.length
+      ? filters.experienceLevel
+      : undefined,
+    p_employment_type: filters.employmentType?.length
+      ? filters.employmentType
+      : undefined,
+    p_work_mode: filters.workMode?.length ? filters.workMode : undefined,
+    p_province: filters.province?.length ? filters.province : undefined,
+    p_job_function: filters.jobFunction?.length
+      ? filters.jobFunction
+      : undefined,
+    p_language: filters.language,
+    p_date_from: dateRange?.dateFrom,
+    p_date_to: dateRange?.dateTo,
+  }
+}
+
+// =============================================================================
+// URL Persistence Functions
+// =============================================================================
+
+/**
+ * Serialize filters to URL search params
+ * Arrays are comma-separated, single values are stored directly
  *
  * @param filters - The current filter state
- * @returns Number of active filters
+ * @returns URLSearchParams object
  */
-export function countActiveFilters(filters: FilterState): number {
-  const filterKeys: ActiveFilterKey[] = [
-    'experienceLevel',
-    'employmentType',
-    'location',
-    'workMode',
-    'province',
-    'jobFunction',
-    'language',
-    'company',
-    'dateFrom',
-    'dateTo',
-  ]
+export function filtersToURLParams(
+  filters: Partial<JobSearchFilters>
+): URLSearchParams {
+  const params = new URLSearchParams()
 
-  return filterKeys.filter(key => filters[key] !== undefined).length
+  if (filters.query) {
+    params.set('q', filters.query)
+  }
+
+  // Multi-select filters (comma-separated)
+  if (filters.experienceLevel?.length) {
+    params.set('exp', filters.experienceLevel.join(','))
+  }
+  if (filters.employmentType?.length) {
+    params.set('type', filters.employmentType.join(','))
+  }
+  if (filters.workMode?.length) {
+    params.set('mode', filters.workMode.join(','))
+  }
+  if (filters.province?.length) {
+    params.set('prov', filters.province.join(','))
+  }
+  if (filters.jobFunction?.length) {
+    params.set('func', filters.jobFunction.join(','))
+  }
+  if (filters.company?.length) {
+    params.set('company', filters.company.join(','))
+  }
+
+  // Single-select filters
+  if (filters.language) {
+    params.set('lang', filters.language)
+  }
+  if (filters.datePreset && filters.datePreset !== 'any') {
+    params.set('date', filters.datePreset)
+  }
+
+  return params
+}
+
+/**
+ * Deserialize URL search params to filters
+ *
+ * @param params - URLSearchParams from the URL
+ * @returns Partial filter state
+ */
+export function urlParamsToFilters(
+  params: URLSearchParams
+): Partial<JobSearchFilters> {
+  const filters: Partial<JobSearchFilters> = {}
+
+  const query = params.get('q')
+  if (query) {
+    filters.query = query
+  }
+
+  // Multi-select filters
+  const exp = params.get('exp')
+  if (exp) {
+    filters.experienceLevel = exp.split(',') as ExperienceLevel[]
+  }
+
+  const type = params.get('type')
+  if (type) {
+    filters.employmentType = type.split(',') as EmploymentType[]
+  }
+
+  const mode = params.get('mode')
+  if (mode) {
+    filters.workMode = mode.split(',') as WorkMode[]
+  }
+
+  const prov = params.get('prov')
+  if (prov) {
+    filters.province = prov.split(',') as Province[]
+  }
+
+  const func = params.get('func')
+  if (func) {
+    filters.jobFunction = func.split(',') as JobFunction[]
+  }
+
+  const company = params.get('company')
+  if (company) {
+    filters.company = company.split(',')
+  }
+
+  // Single-select filters
+  const lang = params.get('lang')
+  if (lang) {
+    filters.language = lang as Language
+  }
+
+  const date = params.get('date')
+  if (date) {
+    filters.datePreset = date as DatePreset
+  }
+
+  return filters
+}
+
+// =============================================================================
+// Utility Functions
+// =============================================================================
+
+/**
+ * Count the number of active filters (excluding query)
+ * For multi-select, counts the number of selected items
+ *
+ * @param filters - The current filter state
+ * @returns Total number of active filter selections
+ */
+export function countActiveFilters(filters: Partial<JobSearchFilters>): number {
+  let count = 0
+
+  // Count multi-select items
+  count += filters.experienceLevel?.length ?? 0
+  count += filters.employmentType?.length ?? 0
+  count += filters.workMode?.length ?? 0
+  count += filters.province?.length ?? 0
+  count += filters.jobFunction?.length ?? 0
+  count += filters.company?.length ?? 0
+
+  // Count single-select (1 if set)
+  if (filters.language) count += 1
+  if (filters.datePreset && filters.datePreset !== 'any') count += 1
+
+  return count
+}
+
+/**
+ * Count active selections for a specific filter
+ *
+ * @param filters - The current filter state
+ * @param key - The filter key to count
+ * @returns Number of selections for that filter
+ */
+export function countFilterSelections(
+  filters: Partial<JobSearchFilters>,
+  key: FilterKey
+): number {
+  const value = filters[key]
+
+  if (Array.isArray(value)) {
+    return value.length
+  }
+
+  if (key === 'datePreset') {
+    return value && value !== 'any' ? 1 : 0
+  }
+
+  return value ? 1 : 0
 }
 
 /**
@@ -245,7 +501,7 @@ export function countActiveFilters(filters: FilterState): number {
  * @param filters - The current filter state
  * @returns True if any filters are active
  */
-export function hasActiveFilters(filters: FilterState): boolean {
+export function hasActiveFilters(filters: Partial<JobSearchFilters>): boolean {
   return countActiveFilters(filters) > 0
 }
 
@@ -259,7 +515,7 @@ export function hasActiveFilters(filters: FilterState): boolean {
 export function clearFilters(
   preserveQuery: boolean = false,
   currentQuery?: string
-): FilterState {
+): Partial<JobSearchFilters> {
   return preserveQuery && currentQuery ? { query: currentQuery } : {}
 }
 
@@ -299,4 +555,25 @@ export function hasMorePages(
   pageSize: number
 ): boolean {
   return currentPage < calculateTotalPages(totalCount, pageSize)
+}
+
+/**
+ * Toggle a value in a multi-select filter array
+ *
+ * @param currentValues - Current array of selected values
+ * @param value - Value to toggle
+ * @returns New array with value added or removed
+ */
+export function toggleFilterValue<T>(
+  currentValues: T[] | undefined,
+  value: T
+): T[] {
+  const values = currentValues ?? []
+  const index = values.indexOf(value)
+
+  if (index === -1) {
+    return [...values, value]
+  }
+
+  return values.filter((_, i) => i !== index)
 }

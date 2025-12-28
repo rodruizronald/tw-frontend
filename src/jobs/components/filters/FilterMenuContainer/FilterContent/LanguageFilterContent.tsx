@@ -1,26 +1,26 @@
 /**
- * DateFilterContent Component
+ * LanguageFilterContent Component
  *
- * Radio button list for selecting date presets.
+ * Radio button list for selecting language.
  */
 
 import { FormControlLabel, Radio, RadioGroup } from '@mui/material'
 import type { ChangeEvent } from 'react'
 
-import type { DatePreset } from '../../../../types/filters'
+import type { Language } from '../../../../types/enums'
 import type { FilterOption } from '../../filterConfig'
 
 // =============================================================================
 // Types
 // =============================================================================
 
-interface DateFilterContentProps {
-  /** Available date preset options */
+interface LanguageFilterContentProps {
+  /** Available language options */
   options: FilterOption[]
-  /** Currently selected value */
-  value: DatePreset
+  /** Currently selected value (or undefined for no selection) */
+  value: Language | undefined
   /** Change handler */
-  onChange: (value: DatePreset) => void
+  onChange: (value: Language) => void
 }
 
 // =============================================================================
@@ -28,28 +28,28 @@ interface DateFilterContentProps {
 // =============================================================================
 
 /**
- * Date filter content with radio buttons
+ * Language filter content with radio buttons
  *
  * @example
  * ```tsx
- * <DateFilterContent
- *   options={DATE_PRESET_OPTIONS}
- *   value={filters.datePreset ?? 'any'}
- *   onChange={(value) => setFilter('datePreset', value)}
+ * <LanguageFilterContent
+ *   options={LANGUAGE_OPTIONS}
+ *   value={filters.language}
+ *   onChange={(value) => setFilter('language', value)}
  * />
  * ```
  */
-export default function DateFilterContent({
+export default function LanguageFilterContent({
   options,
   value,
   onChange,
-}: DateFilterContentProps) {
+}: LanguageFilterContentProps) {
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onChange(event.target.value as DatePreset)
+    onChange(event.target.value as Language)
   }
 
   return (
-    <RadioGroup value={value} onChange={handleChange}>
+    <RadioGroup value={value ?? ''} onChange={handleChange}>
       {options.map(option => (
         <FormControlLabel
           key={option.value}

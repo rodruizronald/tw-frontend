@@ -13,7 +13,10 @@ import {
 } from '@/services/supabase/errors'
 import type { Database } from '@/services/supabase/types/database'
 
-import type { SearchJobsRpcParams } from '../types/filters'
+import type {
+  GetCompaniesRpcParams,
+  SearchJobsRpcParams,
+} from '../types/filters'
 
 // =============================================================================
 // Types
@@ -41,6 +44,22 @@ export interface JobSearchRepositoryResult {
  * Raw company row from the database
  */
 export type CompanyRow = Database['public']['Tables']['companies']['Row']
+
+/**
+ * Result from the get_companies_for_search RPC function
+ */
+export type CompanySearchResult =
+  Database['public']['Functions']['get_companies_for_search']['Returns'][number]
+
+/**
+ * Result of a company search operation
+ */
+export interface CompanySearchRepositoryResult {
+  /** Array of company names with job counts */
+  data: CompanySearchResult[]
+  /** Error if the operation failed */
+  error: SupabaseAppError | null
+}
 
 // =============================================================================
 // Repository Functions
@@ -93,8 +112,6 @@ export async function searchJobs(
       rpcParams.p_experience_level = params.p_experience_level
     if (params.p_employment_type !== undefined)
       rpcParams.p_employment_type = params.p_employment_type
-    if (params.p_location !== undefined)
-      rpcParams.p_location = params.p_location
     if (params.p_work_mode !== undefined)
       rpcParams.p_work_mode = params.p_work_mode
     if (params.p_province !== undefined)
@@ -299,6 +316,84 @@ export async function getCompanies(limit: number = 100): Promise<{
   }
 }
 
+/**
+ * Get companies that have jobs matching the current search criteria
+ *
+ * This function calls the PostgreSQL `get_companies_for_search` function which:
+ * - Filters companies based on the same search criteria used for jobs
+ * - Returns company names with job counts
+ * - Useful for populating the company filter dropdown dynamically
+ *
+ * @param params - Search parameters (same as job search, excluding company filter)
+ * @returns Array of company names with job counts or error
+ *
+ * @example
+ * ```typescript
+ * const result = await getCompaniesForJobs({
+ *   search_query: 'react developer',
+ *   p_experience_level: ['senior'],
+ *   p_work_mode: ['remote'],
+ * })
+ *
+ * if (result.error) {
+ *   console.error(result.error.message)
+ * } else {
+ *   result.data.forEach(c => console.log(`${c.company_name}: ${c.job_count} jobs`))
+ * }
+ * ```
+ */
+export async function getCompaniesForJobs(
+  params: GetCompaniesRpcParams
+): Promise<CompanySearchRepositoryResult> {
+  try {
+    // Build RPC parameters, only including defined values
+    const rpcParams: Database['public']['Functions']['get_companies_for_search']['Args'] =
+      {
+        search_query: params.search_query,
+      }
+
+    // Only add optional parameters if they are defined
+    if (params.p_limit !== undefined) rpcParams.p_limit = params.p_limit
+    if (params.p_experience_level !== undefined)
+      rpcParams.p_experience_level = params.p_experience_level
+    if (params.p_employment_type !== undefined)
+      rpcParams.p_employment_type = params.p_employment_type
+    if (params.p_work_mode !== undefined)
+      rpcParams.p_work_mode = params.p_work_mode
+    if (params.p_province !== undefined)
+      rpcParams.p_province = params.p_province
+    if (params.p_job_function !== undefined)
+      rpcParams.p_job_function = params.p_job_function
+    if (params.p_language !== undefined)
+      rpcParams.p_language = params.p_language
+    if (params.p_date_from !== undefined)
+      rpcParams.p_date_from = params.p_date_from
+    if (params.p_date_to !== undefined) rpcParams.p_date_to = params.p_date_to
+
+    const { data, error } = await supabase.rpc(
+      'get_companies_for_search',
+      rpcParams
+    )
+
+    if (error) {
+      return {
+        data: [],
+        error: handleUnknownError(error),
+      }
+    }
+
+    return {
+      data: data ?? [],
+      error: null,
+    }
+  } catch (error) {
+    return {
+      data: [],
+      error: handleUnknownError(error),
+    }
+  }
+}
+
 // =============================================================================
 // Repository Object (Alternative API)
 // =============================================================================
@@ -315,6 +410,7 @@ export const jobRepository = {
   getJobWithCompany,
   getCompanyByName,
   getCompanies,
+  getCompaniesForJobs,
 } as const
 
 export default jobRepository

@@ -3,25 +3,12 @@
  *
  * This module exports all types related to jobs, including:
  * - Frontend models (Job, SearchResponse)
- * - API types (ApiJob, ApiSearchResponse)
  * - Enum types (ExperienceLevel, WorkMode, etc.)
- * - Filter types (JobSearchFilters, FilterState)
- * - Pagination types
+ * - Filter types (JobSearchFilters, JobSearchPagination)
  */
 
 // Models
 export type { Job, SearchResponse } from './models'
-
-// API types
-export type {
-  ApiJob,
-  ApiParams,
-  ApiRequirements,
-  ApiSearchResponse,
-  ApiTechnology,
-  DateRange,
-  SearchParams,
-} from './api'
 
 // Enums and their utilities
 export type {
@@ -60,25 +47,40 @@ export {
   WORK_MODES,
 } from './enums'
 
+// Models - also export PaginationInfo
+export type { PaginationInfo } from './models'
+
 // Filters and search parameters
 export type {
-  ActiveFilterKey,
-  FilterState,
+  DatePreset,
+  FilterKey,
+  GetCompaniesRpcParams,
   JobSearchFilters,
   JobSearchPagination,
   JobSearchParams,
+  MultiSelectFilterKey,
   SearchJobsRpcParams,
+  SingleSelectFilterKey,
 } from './filters'
 export {
+  // Utility functions
   calculateOffset,
   calculateTotalPages,
   clearFilters,
   countActiveFilters,
+  countFilterSelections,
+  // Constants
+  DATE_PRESETS,
+  // Conversion functions
+  datePresetToRange,
+  filtersToURLParams,
   getDefaultPagination,
   hasActiveFilters,
   hasMorePages,
+  MULTI_SELECT_FILTER_KEYS,
+  SINGLE_SELECT_FILTER_KEYS,
+  toGetCompaniesRpcParams,
+  toggleFilterValue,
   toSearchJobsRpcParams,
+  urlParamsToFilters,
 } from './filters'
-
-// Pagination
-export type { PaginationParams } from './pagination'

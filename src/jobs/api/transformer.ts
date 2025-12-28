@@ -28,7 +28,7 @@ export function transformJob(dbJob: JobSearchResult): Job {
     title: dbJob.title,
     company: dbJob.company_name,
     companyId: dbJob.company_id.toString(),
-    companyLogoUrl: undefined, // Not available in current schema
+    // Note: companyLogoUrl is omitted as it's not available in current schema
 
     // Job details
     description: dbJob.description,
@@ -41,6 +41,10 @@ export function transformJob(dbJob: JobSearchResult): Job {
     jobType: dbJob.employment_type,
     location: dbJob.location,
     workMode: dbJob.work_mode,
+    province: dbJob.province,
+    jobFunction: dbJob.job_function,
+    language: dbJob.language,
+    city: dbJob.city,
 
     // Requirements
     requirements: {

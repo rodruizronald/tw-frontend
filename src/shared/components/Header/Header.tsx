@@ -1,10 +1,9 @@
-import {
-  AnchorFilters,
-  DEFAULT_FILTER_STATE,
-  FILTER_OPTIONS,
-  FilterOptions,
-  FilterType,
-} from '@jobs/constants'
+/**
+ * Header Component
+ *
+ * Application header with search bar and filter chips.
+ */
+
 import SearchIcon from '@mui/icons-material/Search'
 import {
   AppBar,
@@ -15,26 +14,43 @@ import {
   Stack,
   TextField,
 } from '@mui/material'
-import { MouseEvent } from 'react'
+import type { MouseEvent } from 'react'
 
-import FilterChip from '@/jobs/components/filters/FilterChip'
+import { FILTER_CONFIG, FilterChip } from '@/jobs/components/filters'
+import type { AnchorElements } from '@/jobs/hooks'
+import type { FilterKey } from '@/jobs/types/filters'
+
+// =============================================================================
+// Types
+// =============================================================================
 
 interface HeaderProps {
+  /** Current search query */
   searchQuery: string
+  /** Handler for search query changes */
   onSearchChange: (query: string) => void
+  /** Handler for search button click */
   onSearch: () => void
-  filterOptions?: FilterOptions
-  anchorEls?: AnchorFilters
-  onFilterClick: (filter: FilterType, event: MouseEvent<HTMLElement>) => void
-  getActiveFilterCount: (filter: FilterType) => number
+  /** Anchor elements for filter dropdowns */
+  anchorEls: AnchorElements
+  /** Handler for filter chip click */
+  onFilterClick: (filterKey: FilterKey, event: MouseEvent<HTMLElement>) => void
+  /** Get the count of active selections for a filter */
+  getActiveFilterCount: (filterKey: FilterKey) => number
 }
 
+// =============================================================================
+// Component
+// =============================================================================
+
+/**
+ * Application header with search and filter chips
+ */
 export default function Header({
   searchQuery,
   onSearchChange,
   onSearch,
-  filterOptions = FILTER_OPTIONS,
-  anchorEls = DEFAULT_FILTER_STATE.ANCHORS,
+  anchorEls,
   onFilterClick,
   getActiveFilterCount,
 }: HeaderProps) {
@@ -62,6 +78,7 @@ export default function Header({
             alignItems={{ xs: 'stretch', sm: 'center' }}
             sx={{ mb: 2.5 }}
           >
+            {/* Logo Button */}
             <Button
               variant='contained'
               disabled
@@ -82,6 +99,7 @@ export default function Header({
               JobHub
             </Button>
 
+            {/* Search Input */}
             <TextField
               value={searchQuery}
               onChange={e => onSearchChange(e.target.value)}
@@ -109,6 +127,7 @@ export default function Header({
               }}
             />
 
+            {/* Search Button */}
             <Button
               variant='contained'
               onClick={onSearch}
@@ -126,14 +145,14 @@ export default function Header({
             </Button>
           </Stack>
 
-          {/* Filters Row */}
+          {/* Filter Chips Row */}
           <Stack direction='row' spacing={1} flexWrap='wrap' sx={{ gap: 1 }}>
-            {(Object.keys(filterOptions) as FilterType[]).map(filter => (
+            {FILTER_CONFIG.map(config => (
               <FilterChip
-                key={filter}
-                filter={filter}
-                isActive={anchorEls[filter] ?? null}
-                activeCount={getActiveFilterCount(filter)}
+                key={config.key}
+                filterKey={config.key}
+                isOpen={Boolean(anchorEls[config.key])}
+                activeCount={getActiveFilterCount(config.key)}
                 onClick={onFilterClick}
               />
             ))}

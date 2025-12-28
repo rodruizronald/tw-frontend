@@ -1,19 +1,32 @@
+/**
+ * JobLayout Component
+ *
+ * Main layout component for the job search page.
+ * Integrates header, filters, job list, and job details.
+ */
+
 import { JobDetails, JobFilters, JobList } from '@jobs/components'
-import { FILTER_OPTIONS, PAGINATION } from '@jobs/constants'
+import { PAGINATION } from '@jobs/constants'
 import {
-  convertLegacyFilters,
+  useCompanyOptions,
   useJobFilters,
   useJobPagination,
   useJobSearch,
 } from '@jobs/hooks'
-import { Job } from '@jobs/types/models'
+import type { Job } from '@jobs/types/models'
 import { Box } from '@mui/material'
-import type { ReactElement } from 'react'
-import { useCallback, useState } from 'react'
+import type { MouseEvent, ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import Header from '../Header'
 
-// Extract the URL reset logic to a separate function
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Reset URL to page 1 (remove page parameter)
+ */
 const resetToPageOne = (
   setSearchParams: (params: URLSearchParams) => void
 ): void => {
@@ -31,11 +44,16 @@ const resetToPageOne = (
   setSearchParams(newSearchParams)
 }
 
+// =============================================================================
+// Component
+// =============================================================================
+
 export default function JobLayout(): ReactElement {
+  // Search query state
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [appliedSearchQuery, setAppliedSearchQuery] = useState<string>('')
 
-  // Use API job search hook
+  // Job search hook
   const {
     jobs: apiJobs,
     pagination: apiPagination,
@@ -43,31 +61,33 @@ export default function JobLayout(): ReactElement {
     search,
   } = useJobSearch()
 
-  // Use job filters hook
+  // Job filters hook
   const {
+    filters,
     anchorEls,
-    activeFilters,
-    handleFilterClick,
-    handleMenuClose,
-    handleFilterChange,
-    getActiveFilterCount,
+    toggleFilter,
+    setFilter,
+    openDropdown,
+    closeDropdown,
+    getActiveCount,
   } = useJobFilters()
 
-  // Wrapper to adapt the new search API to the old pagination hook interface
-  const searchJobsAdapter = useCallback(
-    async (
-      query: string,
-      _filters: unknown,
-      pagination: { page?: number; pageSize?: number }
-    ) => {
-      const filters = convertLegacyFilters(query, {})
-      const result = await search(filters, pagination)
-      return result
-    },
-    [search]
-  )
+  // Company options hook
+  const {
+    companies,
+    isLoading: isLoadingCompanies,
+    refreshForSearch,
+  } = useCompanyOptions()
 
-  // Use server-side pagination hook
+  // Build complete filters with query
+  const buildFilters = useCallback(() => {
+    return {
+      ...filters,
+      query: searchQuery,
+    }
+  }, [filters, searchQuery])
+
+  // Pagination hook
   const {
     currentPage,
     totalPages,
@@ -78,78 +98,141 @@ export default function JobLayout(): ReactElement {
     setSelectedJobId,
     handlePageChange,
     setSearchParams,
-  } = useJobPagination(
-    apiJobs,
-    apiPagination,
-    searchJobsAdapter,
-    searchQuery,
-    activeFilters
-  )
+  } = useJobPagination(apiJobs, apiPagination, search, buildFilters())
 
-  const handleSearch = async (): Promise<void> => {
-    // Reset to page 1 and clear selected job
+  // ==========================================================================
+  // Handlers
+  // ==========================================================================
+
+  /**
+   * Handle search button click
+   */
+  const handleSearch = useCallback(async (): Promise<void> => {
+    if (!searchQuery.trim()) return
+
+    // Reset to page 1
     resetToPageOne(setSearchParams)
 
     try {
-      // Convert legacy filters to new format
-      const filters = convertLegacyFilters(searchQuery, {})
+      const searchFilters = buildFilters()
 
-      await search(filters, {
-        page: PAGINATION.DEFAULT_PAGE, // Always start from page 1 for new searches
+      await search(searchFilters, {
+        page: PAGINATION.DEFAULT_PAGE,
         pageSize: PAGINATION.PAGE_SIZE,
       })
 
-      // Only clear selection after successful API call
+      // Clear selection and update applied query
       setSelectedJobId(null)
       setAppliedSearchQuery(searchQuery)
 
-      console.log('Search completed successfully')
+      // Refresh company options based on new search
+      await refreshForSearch(searchFilters)
     } catch (error) {
-      console.log('Search failed:', error)
+      console.error('Search failed:', error)
     }
-  }
+  }, [
+    searchQuery,
+    buildFilters,
+    search,
+    setSearchParams,
+    setSelectedJobId,
+    refreshForSearch,
+  ])
 
-  const handleJobSelect = (job: Job): void => {
-    setSelectedJobId(job.id)
-  }
+  /**
+   * Handle job selection
+   */
+  const handleJobSelect = useCallback(
+    (job: Job): void => {
+      setSelectedJobId(job.id)
+    },
+    [setSelectedJobId]
+  )
+
+  /**
+   * Handle filter chip click to open dropdown
+   */
+  const handleFilterClick = useCallback(
+    (filterKey: string, event: MouseEvent<HTMLElement>): void => {
+      const chipElement =
+        (event.currentTarget.closest('.MuiChip-root') as HTMLElement) ||
+        event.currentTarget
+      openDropdown(filterKey as Parameters<typeof openDropdown>[0], chipElement)
+    },
+    [openDropdown]
+  )
+
+  // Track if filters changed (not on initial render)
+  const isFirstRender = useRef(true)
+  const prevFiltersRef = useRef(filters)
+
+  // Re-search when filters change (after initial search)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+
+    if (appliedSearchQuery && prevFiltersRef.current !== filters) {
+      const searchFilters = {
+        ...filters,
+        query: appliedSearchQuery,
+      }
+      search(searchFilters, {
+        page: PAGINATION.DEFAULT_PAGE,
+        pageSize: PAGINATION.PAGE_SIZE,
+      })
+    }
+
+    prevFiltersRef.current = filters
+  }, [filters, appliedSearchQuery, search])
+
+  // ==========================================================================
+  // Render
+  // ==========================================================================
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {/* Header with search and filter chips */}
       <Header
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onSearch={handleSearch}
-        filterOptions={FILTER_OPTIONS}
         anchorEls={anchorEls}
         onFilterClick={handleFilterClick}
-        getActiveFilterCount={getActiveFilterCount}
-      />
-      <JobFilters
-        filterOptions={FILTER_OPTIONS}
-        activeFilters={activeFilters}
-        onFilterChange={handleFilterChange}
-        anchorEls={anchorEls}
-        onMenuClose={handleMenuClose}
+        getActiveFilterCount={getActiveCount}
       />
 
-      {/* Main Content Container - Fixed Height */}
+      {/* Filter dropdown menus */}
+      <JobFilters
+        filters={filters}
+        anchorEls={anchorEls}
+        onCloseDropdown={closeDropdown}
+        onToggleFilter={toggleFilter}
+        onSetDatePreset={(_, value) => setFilter('datePreset', value)}
+        onSetLanguage={value => setFilter('language', value)}
+        companyOptions={companies}
+        isLoadingCompanies={isLoadingCompanies}
+      />
+
+      {/* Main Content Container */}
       <Box
         sx={{
           flex: 1,
           display: 'flex',
-          minHeight: 0, // Important for flex children to be scrollable
+          minHeight: 0,
           bgcolor: '#f5f5f5',
-          px: { xs: 2, sm: 4, md: 8, lg: 18, xl: 36 }, // Responsive horizontal padding
-          py: 2, // Small vertical padding for breathing room
+          px: { xs: 2, sm: 4, md: 8, lg: 18, xl: 36 },
+          py: 2,
         }}
       >
-        {/* Job List Container - Independent Scrolling */}
+        {/* Job List */}
         <Box
           sx={{
             width: '45%',
             display: 'flex',
             flexDirection: 'column',
-            minHeight: 0, // Important for scrolling
+            minHeight: 0,
           }}
         >
           <JobList
@@ -165,13 +248,13 @@ export default function JobLayout(): ReactElement {
           />
         </Box>
 
-        {/* Job Details Container - Independent Scrolling */}
+        {/* Job Details */}
         <Box
           sx={{
             width: '55%',
             display: 'flex',
             flexDirection: 'column',
-            minHeight: 0, // Important for scrolling
+            minHeight: 0,
           }}
         >
           <JobDetails job={selectedJob} isFetching={isFetching} />
