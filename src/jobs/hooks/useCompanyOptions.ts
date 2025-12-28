@@ -112,7 +112,8 @@ export function useCompanyOptions(
     } finally {
       setIsLoading(false)
     }
-  }, [logger])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // logger is stable, no need to include
 
   /**
    * Refresh companies based on current search filters
@@ -164,7 +165,8 @@ export function useCompanyOptions(
         setIsLoading(false)
       }
     },
-    [logger, loadAllCompanies]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loadAllCompanies] // logger is stable
   )
 
   // Auto-load companies on mount if enabled
