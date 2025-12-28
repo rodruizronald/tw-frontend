@@ -22,11 +22,14 @@ export { jobService, searchJobs } from './jobService'
 
 export type {
   CompanyRow,
+  CompanySearchRepositoryResult,
+  CompanySearchResult,
   JobSearchRepositoryResult,
   JobSearchResult,
 } from './jobRepository'
 export {
   getCompanies,
+  getCompaniesForJobs,
   getCompanyByName,
   getJobById,
   getJobWithCompany,
