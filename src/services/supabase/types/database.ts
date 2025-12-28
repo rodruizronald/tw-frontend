@@ -246,20 +246,37 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      search_jobs: {
+      get_companies_for_search: {
         Args: {
-          p_company?: string
           p_date_from?: string
           p_date_to?: string
-          p_employment_type?: Database['public']['Enums']['employment_type_enum']
-          p_experience_level?: Database['public']['Enums']['experience_level_enum']
-          p_job_function?: Database['public']['Enums']['job_function_enum']
+          p_employment_type?: Database['public']['Enums']['employment_type_enum'][]
+          p_experience_level?: Database['public']['Enums']['experience_level_enum'][]
+          p_job_function?: Database['public']['Enums']['job_function_enum'][]
           p_language?: Database['public']['Enums']['language_enum']
           p_limit?: number
-          p_location?: Database['public']['Enums']['location_enum']
+          p_province?: Database['public']['Enums']['province_enum'][]
+          p_work_mode?: Database['public']['Enums']['work_mode_enum'][]
+          search_query: string
+        }
+        Returns: {
+          company_name: string
+          job_count: number
+        }[]
+      }
+      search_jobs: {
+        Args: {
+          p_company?: string[]
+          p_date_from?: string
+          p_date_to?: string
+          p_employment_type?: Database['public']['Enums']['employment_type_enum'][]
+          p_experience_level?: Database['public']['Enums']['experience_level_enum'][]
+          p_job_function?: Database['public']['Enums']['job_function_enum'][]
+          p_language?: Database['public']['Enums']['language_enum']
+          p_limit?: number
           p_offset?: number
-          p_province?: Database['public']['Enums']['province_enum']
-          p_work_mode?: Database['public']['Enums']['work_mode_enum']
+          p_province?: Database['public']['Enums']['province_enum'][]
+          p_work_mode?: Database['public']['Enums']['work_mode_enum'][]
           search_query: string
         }
         Returns: {
