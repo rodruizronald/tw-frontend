@@ -5,7 +5,7 @@
 CREATE TABLE technologies (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
-    parent_id INT REFERENCES technologies(id),
+    parent_id INT REFERENCES technologies(id) ON DELETE SET NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
